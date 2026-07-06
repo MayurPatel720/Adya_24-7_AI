@@ -1,0 +1,32 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyWebhookSignature } from '@/lib/auth';
+import { sendTextMessage } from '@/lib/invoice-sender';
+import * as templates from '@/lib/whatsapp-templates';
+import { logger } from '@/lib/logger';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.text();
+    const signature = req.headers.get('x-webhook-signature');
+
+    if (!verifyWebhookSignature(signature, body)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    const data = JSON.parse(body);
+    const { stock } = data;
+
+    if (!stock?.customerPhone) {
+      return NextResponse.json({ success: true, message: 'No phone — skipped' });
+    }
+
+    const message = templates.backInStock(stock);
+
+    sendTextMessage(stock.customerPhone, message, 'back_in_stock').catch(() => {});
+
+    return NextResponse.json({ success: true, productName: stock.productName });
+  } catch (err: any) {
+    logger.error('WEBHOOK-STOCK', 'Stock webhook error', { error: err.message });
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
+}

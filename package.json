@@ -1,0 +1,27 @@
+{
+  "name": "adya-24-7-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "cron:followup": "node cron/followup.js",
+    "cron:review": "node cron/review-request.js",
+    "cron:birthday": "node cron/birthday.js",
+    "cron:cart": "node cron/abandoned-cart.js",
+    "cron:stock": "node cron/back-in-stock.js",
+    "cron:summary": "node cron/daily-summary.js"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  }
+}
