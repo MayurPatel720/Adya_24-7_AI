@@ -1,6 +1,9 @@
 import { WhatsAppMessage } from '@/types';
 
+// OpenClaw runs on same service at port 3001
 const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3001';
+// If URL is the public Render URL, use localhost instead (OpenClaw is local)
+const EFFECTIVE_URL = GATEWAY_URL.includes('onrender.com') ? 'http://localhost:3001' : GATEWAY_URL;
 const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
 
 export async function sendWhatsAppMessage(msg: WhatsAppMessage): Promise<boolean> {
@@ -23,7 +26,7 @@ export async function sendWhatsAppMessage(msg: WhatsAppMessage): Promise<boolean
       if (msg.caption) payload.media.caption = msg.caption;
     }
 
-    const res = await fetch(`${GATEWAY_URL}/api/whatsapp/send`, {
+    const res = await fetch(`${EFFECTIVE_URL}/api/whatsapp/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +50,7 @@ export async function sendWhatsAppMessage(msg: WhatsAppMessage): Promise<boolean
 
 export async function checkOpenClawStatus(): Promise<{ connected: boolean; details?: any }> {
   try {
-    const res = await fetch(`${GATEWAY_URL}/api/health`, {
+    const res = await fetch(`${EFFECTIVE_URL}/api/health`, {
       headers: { 'Authorization': `Bearer ${GATEWAY_TOKEN}` },
     });
 
@@ -78,7 +81,7 @@ export async function sendWhatsAppDocument(
 
     if (caption) payload.media.caption = caption;
 
-    const res = await fetch(`${GATEWAY_URL}/api/whatsapp/send-media`, {
+    const res = await fetch(`${EFFECTIVE_URL}/api/whatsapp/send-media`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
