@@ -8,6 +8,16 @@ export default function HomePage() {
         24-7 AI — WhatsApp Bridge Service
       </h2>
 
+      {/* Pair WhatsApp Button */}
+      <a href="/pair" style={{
+        display: 'inline-block', marginTop: 24, padding: '14px 32px',
+        background: '#C4964A', color: '#0a0806', textDecoration: 'none',
+        borderRadius: 4, fontWeight: 600, fontSize: 13, letterSpacing: 1,
+        textTransform: 'uppercase'
+      }}>
+        Pair WhatsApp →
+      </a>
+
       <div style={{ marginTop: 40, padding: 24, border: '1px solid #2a2a2a', borderRadius: 8 }}>
         <h3 style={{ color: '#C4964A', fontSize: 14, letterSpacing: 2, textTransform: 'uppercase', marginTop: 0 }}>
           Service Status
@@ -18,6 +28,7 @@ export default function HomePage() {
         <div style={{ marginTop: 20 }}>
           <StatusRow label="API Health" endpoint="/api/health" />
           <StatusRow label="WhatsApp Status" endpoint="/api/whatsapp/status" />
+          <StatusRow label="Pair WhatsApp" endpoint="/pair" highlight />
           <StatusRow label="Admin Dashboard" endpoint="/admin" />
         </div>
       </div>
@@ -41,11 +52,27 @@ export default function HomePage() {
   );
 }
 
-function StatusRow({ label, endpoint }: { label: string; endpoint: string }) {
+function StatusRow({ label, endpoint, highlight }: { label: string; endpoint: string; highlight?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1a1a1a' }}>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', padding: '10px 0',
+      borderBottom: '1px solid #1a1a1a'
+    }}>
       <span style={{ color: '#d0c2b0' }}>{label}</span>
-      <a href={endpoint} target="_blank" rel="noopener" style={{ color: '#C4964A', fontSize: 13 }}>
+      <a
+        href={endpoint}
+        target={endpoint.startsWith('http') ? '_blank' : undefined}
+        rel={endpoint.startsWith('http') ? 'noopener noreferrer' : undefined}
+        style={{
+          color: highlight ? '#0a0806' : '#C4964A',
+          background: highlight ? '#C4964A' : 'transparent',
+          padding: highlight ? '4px 12px' : '0',
+          borderRadius: highlight ? 4 : 0,
+          fontSize: 13,
+          textDecoration: 'none',
+          fontWeight: highlight ? 600 : 400,
+        }}
+      >
         {endpoint} →
       </a>
     </div>
