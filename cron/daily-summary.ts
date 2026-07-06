@@ -1,42 +1,28 @@
-const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
-const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
+const API_URL = process.env.API_URL || 'http://localhost:3000';
+const API_KEY = process.env.ADMIN_API_KEY || 'adyawear_admin_2026';
 const ADMIN_PHONE = process.env.ADMIN_PHONE || '';
 
 async function sendMessage(to: string, text: string): Promise<boolean> {
   try {
-    const res = await fetch(`${GATEWAY_URL}/api/whatsapp/send`, {
+    const res = await fetch(`${API_URL}/api/whatsapp/send`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GATEWAY_TOKEN}`,
-      },
-      body: JSON.stringify({ to, text }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+      body: JSON.stringify({ to, message: text }),
     });
     return res.ok;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 async function run() {
   console.log('[CRON] Daily summary — generating stats...');
-
   const today = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
-
-  // In production, fetch stats from ADYAWEAR API
-  const stats = {
-    date: today,
-    messagesSent: 0,
-    ordersProcessed: 0,
-    invoicesSent: 0,
-  };
-
+  
   const summary = [
     `📊 *Daily WhatsApp Summary — ${today}*`,
     ``,
-    `📨 Messages sent: ${stats.messagesSent}`,
-    `📦 Orders processed: ${stats.ordersProcessed}`,
-    `📄 Invoices sent: ${stats.invoicesSent}`,
+    `📨 Messages sent: 0`,
+    `📦 Orders processed: 0`,
+    `📄 Invoices sent: 0`,
   ].join('\n');
 
   if (ADMIN_PHONE) {

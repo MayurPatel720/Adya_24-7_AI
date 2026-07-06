@@ -2,44 +2,22 @@ services:
   - type: web
     name: adya-24-7-ai
     runtime: node
+    region: oregon
     plan: starter
     buildCommand: bash scripts/build.sh
     startCommand: bash scripts/start.sh
-    healthCheckPath: /api/health
     envVars:
-      # ─── MiMo AI (your OpenRouter key) ───
-      - key: XIAOMI_API_KEY
-        sync: false
-      # ─── OpenClaw Gateway ───
-      - key: OPENCLAW_GATEWAY_TOKEN
-        value: adyawear-openclaw-2026-secure
-      - key: OPENCLAW_PORT
-        value: 3001
-      # ─── Webhook Security ───
+      - key: NODE_ENV
+        value: production
+      - key: NEXTAUTH_SECRET
+        generateValue: true
       - key: WEBHOOK_SECRET
-        value: adyawear_bridge_secret_2026
-      # ─── WhatsApp ───
-      - key: WHATSAPP_BUSINESS_NAME
-        value: ADYAWEAR
+        generateValue: true
+      - key: ADMIN_API_KEY
+        value: adyawear_admin_2026
       - key: WHATSAPP_SENDER_PHONE
         sync: false
       - key: ADMIN_PHONE
+        value: +917859976160
+      - key: XIAOMI_API_KEY
         sync: false
-      # ─── Admin ───
-      - key: ADMIN_API_KEY
-        value: adyawear_admin_2026
-      # ─── ADYAWEAR Store ───
-      - key: ADYAWEAR_STORE_URL
-        value: https://www.adyawear.in
-      - key: ADYAWEAR_STORE_API
-        value: https://www.adyawear.in/api
-      # ─── Cron ───
-      - key: FOLLOWUP_DELAY_DAYS
-        value: 3
-      - key: REVIEW_REQUEST_DELAY_DAYS
-        value: 5
-      # ─── Server ───
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 3000

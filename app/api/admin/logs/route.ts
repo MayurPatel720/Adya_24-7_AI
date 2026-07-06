@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminApiKey } from '@/lib/auth';
-import { getLogs, getLogStats } from '@/lib/db';
+import { getMessageLogs, getLogStats } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,11 +10,9 @@ export async function GET(req: NextRequest) {
     }
 
     const url = new URL(req.url);
-    const event = url.searchParams.get('event') || undefined;
-    const status = url.searchParams.get('status') || undefined;
     const limit = parseInt(url.searchParams.get('limit') || '100');
 
-    const logs = getLogs({ event, status, limit });
+    const logs = getMessageLogs(limit);
     const stats = getLogStats();
 
     return NextResponse.json({ logs, stats });

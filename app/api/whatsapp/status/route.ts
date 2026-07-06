@@ -1,17 +1,22 @@
 import { NextResponse } from 'next/server';
-import { checkOpenClawStatus } from '@/lib/openclaw';
-import { getLogStats } from '@/lib/db';
+import { getWhatsAppSession } from '@/lib/whatsapp';
 
 export async function GET() {
-  const [openclaw, stats] = await Promise.all([
-    checkOpenClawStatus(),
-    Promise.resolve(getLogStats()),
-  ]);
+  try {
+    const session = getWhatsAppSession();
+    const status = session.getStatus();
 
-  return NextResponse.json({
-    openclaw: openclaw.connected ? 'connected' : 'disconnected',
-    openclawDetails: openclaw.details,
-    messages: stats,
-    timestamp: new Date().toISOString(),
-  });
+    return NextResponse.json({
+      connected: status === 'connected',
+      status,
+      service: 'baileys',
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    return NextResponse.json({ 
+      connected: false,
+      status: 'error',
+      error: 'Failed to check status'
+    }, { status: 500 });
+  }
 }

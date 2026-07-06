@@ -1,32 +1,33 @@
-type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+const LOG_LEVELS = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+} as const;
 
-const LEVEL_PRIORITY: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
+const currentLevel = process.env.LOG_LEVEL === 'debug' ? 3 : 
+                     process.env.LOG_LEVEL === 'info' ? 2 :
+                     process.env.LOG_LEVEL === 'warn' ? 1 : 2;
 
-const MIN_LEVEL = LEVEL_PRIORITY[process.env.LOG_LEVEL as LogLevel] || LEVEL_PRIORITY.info;
+function formatTime() {
+  return new Date().toISOString();
+}
 
-function log(level: LogLevel, prefix: string, message: string, data?: any) {
-  if (LEVEL_PRIORITY[level] < MIN_LEVEL) return;
-
-  const ts = new Date().toISOString();
-  const tag = `[${ts}] [${level.toUpperCase()}] [${prefix}]`;
-  const msg = data ? `${message} ${JSON.stringify(data)}` : message;
-
-  switch (level) {
-    case 'error': console.error(`${tag} ${msg}`); break;
-    case 'warn': console.warn(`${tag} ${msg}`); break;
-    case 'debug': console.debug(`${tag} ${msg}`); break;
-    default: console.log(`${tag} ${msg}`);
-  }
+function formatMsg(level: string, ...args: any[]) {
+  return `[${formatTime()}] [${level.toUpperCase()}]`;
 }
 
 export const logger = {
-  info: (prefix: string, msg: string, data?: any) => log('info', prefix, msg, data),
-  warn: (prefix: string, msg: string, data?: any) => log('warn', prefix, msg, data),
-  error: (prefix: string, msg: string, data?: any) => log('error', prefix, msg, data),
-  debug: (prefix: string, msg: string, data?: any) => log('debug', prefix, msg, data),
+  error: (...args: any[]) => {
+    if (currentLevel >= 0) console.error(formatMsg('error'), ...args);
+  },
+  warn: (...args: any[]) => {
+    if (currentLevel >= 1) console.warn(formatMsg('warn'), ...args);
+  },
+  info: (...args: any[]) => {
+    if (currentLevel >= 2) console.log(formatMsg('info'), ...args);
+  },
+  debug: (...args: any[]) => {
+    if (currentLevel >= 3) console.log(formatMsg('debug'), ...args);
+  },
 };

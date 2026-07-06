@@ -1,37 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdminApiKey } from '@/lib/auth';
-import { sendWhatsAppMessage } from '@/lib/openclaw';
-import { appendLog, generateId } from '@/lib/db';
-import { logger } from '@/lib/logger';
+import { getWhatsAppSession } from '@/lib/whatsapp';
+import { verifyWebhookSignature } from '@/lib/auth';
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const apiKey = req.headers.get('x-api-key');
-    if (!verifyAdminApiKey(apiKey)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = await request.json();
+    const { to, message, template, params } = body;
+
+    if (!to || (!message && !template)) {
+      return NextResponse.json({ error: 'Missing to and message/template' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const { to, text, imageUrl, documentUrl, documentName, caption } = body;
-
-    if (!to) {
-      return NextResponse.json({ error: 'Missing "to" field' }, { status: 400 });
+    const signature = request.headers.get('x-webhook-signature');
+    if (signature && !verifyWebhookSignature(body, signature)) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    const success = await sendWhatsAppMessage({ to, text, imageUrl, documentUrl, documentName, caption });
+    const session = getWhatsAppSession();
+    
+    if (session.getStatus() !== 'connected') {
+      return NextResponse.json({ error: 'WhatsApp not connected. Please pair first.' }, { status: 503 });
+    }
 
-    appendLog({
-      id: generateId(),
-      to,
-      event: 'manual_send',
-      template: 'manual',
-      status: success ? 'sent' : 'failed',
-      timestamp: new Date().toISOString(),
-    });
+    let success: boolean;
+    
+    if (template) {
+      success = await session.sendTemplate(to, template, params || {});
+    } else {
+      success = await session.sendMessage(to, message);
+    }
 
-    return NextResponse.json({ success });
-  } catch (err: any) {
-    logger.error('WA-SEND', 'Manual send error', { error: err.message });
+    if (success) {
+      return NextResponse.json({ success: true, to, message: 'Sent' });
+    } else {
+      return NextResponse.json({ error: 'Failed to send' }, { status: 500 });
+    }
+  } catch (error) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

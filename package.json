@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "start:all": "bash scripts/start.sh",
     "cron:followup": "node cron/followup.js",
     "cron:review": "node cron/review-request.js",
     "cron:birthday": "node cron/birthday.js",
@@ -15,8 +14,10 @@
     "cron:summary": "node cron/daily-summary.js"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
     "next": "^14.2.0",
-    "openclaw": "^2026.5.0",
+    "pino": "^9.0.0",
+    "qrcode-terminal": "^0.12.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },

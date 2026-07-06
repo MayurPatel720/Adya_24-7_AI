@@ -58,7 +58,7 @@ export default function AdminPage() {
       await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-        body: JSON.stringify({ to: sendPhone, text: sendMsg }),
+        body: JSON.stringify({ to: sendPhone, message: sendMsg }),
       });
       setSendMsg('');
       fetchLogs();

@@ -1,5 +1,4 @@
-import { sendWhatsAppDocument, sendWhatsAppMessage } from './openclaw';
-import { appendLog, generateId } from './db';
+import { getWhatsAppSession } from './whatsapp';
 import { logger } from './logger';
 
 export async function sendInvoiceViaWhatsApp(
@@ -9,24 +8,10 @@ export async function sendInvoiceViaWhatsApp(
   fileName: string
 ): Promise<boolean> {
   const caption = `📄 Invoice for order #${orderId}\n\nThank you for shopping with ADYAWEAR!`;
-
-  const success = await sendWhatsAppDocument(
-    customerPhone,
-    invoicePdfBase64,
-    fileName,
-    caption
-  );
-
-  appendLog({
-    id: generateId(),
-    to: customerPhone,
-    event: 'invoice_sent',
-    template: 'invoice',
-    status: success ? 'sent' : 'failed',
-    error: success ? undefined : 'Failed to send invoice document',
-    timestamp: new Date().toISOString(),
-    orderId,
-  });
+  const session = getWhatsAppSession();
+  
+  const buffer = Buffer.from(invoicePdfBase64, 'base64');
+  const success = await session.sendDocument(customerPhone, buffer, fileName, 'application/pdf');
 
   if (success) {
     logger.info('INVOICE', `Invoice sent for order ${orderId} to ${customerPhone}`);
@@ -43,17 +28,14 @@ export async function sendTextMessage(
   event: string,
   orderId?: string
 ): Promise<boolean> {
-  const success = await sendWhatsAppMessage({ to: customerPhone, text });
+  const session = getWhatsAppSession();
+  const success = await session.sendMessage(customerPhone, text);
 
-  appendLog({
-    id: generateId(),
-    to: customerPhone,
-    event,
-    template: event,
-    status: success ? 'sent' : 'failed',
-    timestamp: new Date().toISOString(),
-    orderId,
-  });
+  if (success) {
+    logger.info(event, `Message sent to ${customerPhone}`, { orderId });
+  } else {
+    logger.error(event, `Failed to send to ${customerPhone}`);
+  }
 
   return success;
 }
