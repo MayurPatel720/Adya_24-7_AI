@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:all": "bash scripts/start.sh",
     "cron:followup": "node cron/followup.js",
     "cron:review": "node cron/review-request.js",
     "cron:birthday": "node cron/birthday.js",
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "next": "^14.2.0",
+    "openclaw": "^2026.5.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
