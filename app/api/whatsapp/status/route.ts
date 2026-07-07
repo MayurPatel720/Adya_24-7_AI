@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
-import { getWhatsAppSession } from '@/lib/whatsapp';
+import { verifyToken, getPhoneNumberInfo } from '@/lib/whatsapp';
 
 export async function GET() {
   try {
-    const session = getWhatsAppSession();
-    const status = session.getStatus();
+    const tokenValid = await verifyToken();
+    const phoneInfo = await getPhoneNumberInfo();
 
     return NextResponse.json({
-      connected: status === 'connected',
-      status,
-      service: 'baileys',
+      connected: tokenValid,
+      status: tokenValid ? 'connected' : 'disconnected',
+      service: 'cloud_api',
+      phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || 'not configured',
+      businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || 'not configured',
+      phoneNumber: (phoneInfo as Record<string, unknown>)?.display_phone_number || 'unknown',
+      verifiedName: (phoneInfo as Record<string, unknown>)?.verified_name || 'unknown',
+      qualityRating: (phoneInfo as Record<string, unknown>)?.quality_rating || 'unknown',
       uptime: process.uptime()
     });
   } catch (error) {
-    return NextResponse.json({ 
+    return NextResponse.json({
       connected: false,
       status: 'error',
       error: 'Failed to check status'

@@ -4,17 +4,20 @@ import { useState, useEffect, useCallback } from 'react';
 
 export default function HomePage() {
   const [status, setStatus] = useState('disconnected');
-  const [qr, setQr] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, sent: 0, received: 0 });
-  const [autoConnect, setAutoConnect] = useState(true);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [verifiedName, setVerifiedName] = useState('');
+  const [qualityRating, setQualityRating] = useState('');
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/whatsapp/pair');
       const data = await res.json();
       setStatus(data.status);
-      if (data.qr) setQr(data.qr);
-      
+      if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
+      if (data.verifiedName) setVerifiedName(data.verifiedName);
+      if (data.qualityRating) setQualityRating(data.qualityRating);
+
       if (data.status === 'connected') {
         const statsRes = await fetch('/api/health');
         const statsData = await statsRes.json();
@@ -25,23 +28,9 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000);
+    const interval = setInterval(fetchStatus, 10000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
-
-  useEffect(() => {
-    if (autoConnect && status === 'disconnected') {
-      connect();
-      setAutoConnect(false);
-    }
-  }, [autoConnect, status]);
-
-  const connect = async () => {
-    try {
-      setStatus('connecting');
-      await fetch('/api/whatsapp/pair', { method: 'POST' });
-    } catch {}
-  };
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '60px 20px' }}>
@@ -49,56 +38,42 @@ export default function HomePage() {
         ADYAWEAR
       </h1>
       <h2 style={{ color: '#8A7E72', fontWeight: 300, fontSize: 16, marginTop: 0, letterSpacing: 2 }}>
-        24-7 AI — WhatsApp Bridge Service
+        24-7 AI — WhatsApp Cloud API
       </h2>
 
       {/* Connection Status Card */}
-      <div style={{ 
+      <div style={{
         marginTop: 24, padding: 24, borderRadius: 8,
-        background: status === 'connected' ? '#0a1a0a' : status === 'connecting' ? '#1a1a0a' : '#1a0a0a',
-        border: `1px solid ${status === 'connected' ? '#2a4a2a' : status === 'connecting' ? '#4a4a2a' : '#4a2a2a'}`
+        background: status === 'connected' ? '#0a1a0a' : '#1a0a0a',
+        border: `1px solid ${status === 'connected' ? '#2a4a2a' : '#4a2a2a'}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
             width: 12, height: 12, borderRadius: '50%',
-            background: status === 'connected' ? '#4CAF50' : status === 'connecting' ? '#FFC107' : '#F44336'
+            background: status === 'connected' ? '#4CAF50' : '#F44336'
           }} />
-          <span style={{ 
-            color: status === 'connected' ? '#4CAF50' : status === 'connecting' ? '#FFC107' : '#F44336',
+          <span style={{
+            color: status === 'connected' ? '#4CAF50' : '#F44336',
             fontWeight: 600, fontSize: 14, textTransform: 'uppercase', letterSpacing: 1
           }}>
-            {status === 'connected' ? 'WhatsApp Connected' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
+            {status === 'connected' ? 'WhatsApp Cloud API Connected' : 'Disconnected'}
           </span>
         </div>
 
-        {status === 'disconnected' && (
-          <button 
-            onClick={connect}
-            style={{
-              marginTop: 16, padding: '12px 24px', background: '#C4964A', color: '#0a0806',
-              border: 'none', borderRadius: 4, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              textTransform: 'uppercase', letterSpacing: 1
-            }}
-          >
-            Connect WhatsApp
-          </button>
-        )}
-
-        {qr && status === 'connecting' && (
-          <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <p style={{ color: '#d0c2b0', marginBottom: 16 }}>Scan this QR code with WhatsApp:</p>
-            <div style={{ 
-              background: 'white', padding: 20, borderRadius: 8, display: 'inline-block'
-            }}>
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`}
-                alt="WhatsApp QR Code"
-                style={{ width: 256, height: 256 }}
-              />
+        {status === 'connected' && (
+          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div>
+              <div style={{ color: '#8A7E72', fontSize: 11, textTransform: 'uppercase' }}>Phone</div>
+              <div style={{ color: '#d0c2b0', fontSize: 14 }}>{phoneNumber}</div>
             </div>
-            <p style={{ color: '#8A7E72', marginTop: 16, fontSize: 12 }}>
-              Open WhatsApp → Settings → Linked Devices → Link a Device
-            </p>
+            <div>
+              <div style={{ color: '#8A7E72', fontSize: 11, textTransform: 'uppercase' }}>Business</div>
+              <div style={{ color: '#d0c2b0', fontSize: 14 }}>{verifiedName}</div>
+            </div>
+            <div>
+              <div style={{ color: '#8A7E72', fontSize: 11, textTransform: 'uppercase' }}>Quality</div>
+              <div style={{ color: '#d0c2b0', fontSize: 14 }}>{qualityRating}</div>
+            </div>
           </div>
         )}
       </div>
@@ -141,6 +116,7 @@ export default function HomePage() {
           <div>POST /api/webhook/invoice — Invoice PDF send</div>
           <div>POST /api/webhook/cart — Abandoned cart</div>
           <div>POST /api/webhook/stock — Back in stock</div>
+          <div>POST /api/webhook/whatsapp — Meta webhook receiver</div>
         </div>
       </div>
     </div>

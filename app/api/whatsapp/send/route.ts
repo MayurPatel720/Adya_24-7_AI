@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWhatsAppSession } from '@/lib/whatsapp';
+import { sendTextMessage, sendTemplateMessage, TEMPLATE_NAMES, TemplateKey } from '@/lib/whatsapp';
 import { verifyWebhookSignature } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
@@ -16,18 +16,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    const session = getWhatsAppSession();
-    
-    if (session.getStatus() !== 'connected') {
-      return NextResponse.json({ error: 'WhatsApp not connected. Please pair first.' }, { status: 503 });
-    }
-
     let success: boolean;
-    
+
     if (template) {
-      success = await session.sendTemplate(to, template, params || {});
+      const templateName = TEMPLATE_NAMES[template as TemplateKey] || template;
+      success = await sendTemplateMessage(to, templateName, params || []);
     } else {
-      success = await session.sendMessage(to, message);
+      success = await sendTextMessage(to, message);
     }
 
     if (success) {

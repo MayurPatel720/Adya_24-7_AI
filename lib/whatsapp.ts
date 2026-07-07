@@ -1,26 +1,57 @@
-import {
-  makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  WASocket,
-  isJidUser,
-  WAMessage,
-  makeInMemoryStore,
-  WASocketOptions
-} from '@whiskeysockets/baileys';
-import { logger } from './logger';
-import * as fs from 'fs';
-import * as path from 'path';
+const API_VERSION = process.env.WHATSAPP_API_VERSION || 'v23.0';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const ACCESS_TOKEN = process.env.WHATSAPP_TOKEN;
+const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
+
+interface TemplateParam {
+  type: 'text';
+  text: string;
+}
+
+interface TemplateComponent {
+  type: 'header' | 'body' | 'button';
+  parameters: TemplateParam[];
+}
+
+interface SendTemplatePayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'template';
+  template: {
+    name: string;
+    language: { code: string };
+    components?: TemplateComponent[];
+  };
+}
+
+interface SendTextPayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'text';
+  text: { body: string };
+}
+
+interface SendImagePayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'image';
+  image: { link: string; caption?: string };
+}
+
+interface SendDocumentPayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'document';
+  document: { link: string; filename: string; caption?: string };
+}
 
 export interface WhatsAppMessage {
-  key: {
-    remoteJid: string | null;
-    fromMe: boolean;
-    id: string | null;
-  };
-  message: any | null;
-  messageTimestamp: number;
-  pushName?: string;
+  to: string;
+  text?: string;
+  imageUrl?: string;
+  documentUrl?: string;
+  documentName?: string;
+  caption?: string;
 }
 
 export interface MessageLog {
@@ -34,333 +65,210 @@ export interface MessageLog {
   template?: string;
 }
 
-const SESSION_DIR = path.join(process.cwd(), 'data', 'whatsapp-session');
-const MESSAGE_LOG_PATH = path.join(process.cwd(), 'data', 'messages.json');
-const QR_TIMEOUT = 60000;
+function headers(): Record<string, string> {
+  return {
+    'Authorization': `Bearer ${ACCESS_TOKEN}`,
+    'Content-Type': 'application/json',
+  };
+}
 
-class WhatsAppSession {
-  private sock: WASocket | null = null;
-  private qrCode: string | null = null;
-  private connectionStatus: 'disconnected' | 'connecting' | 'connected' = 'disconnected';
-  private qrCallbacks: Array<(qr: string | null) => void> = [];
-  private statusCallbacks: Array<(status: string) => void> = [];
-  private messageCallbacks: Array<(msg: WhatsAppMessage) => void> = [];
-
-  constructor() {
-    this.ensureDirs();
+export async function sendTextMessage(to: string, text: string): Promise<boolean> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) {
+    console.error('WhatsApp credentials not configured');
+    return false;
   }
 
-  private ensureDirs() {
-    if (!fs.existsSync(SESSION_DIR)) {
-      fs.mkdirSync(SESSION_DIR, { recursive: true });
-    }
-    const dataDir = path.dirname(MESSAGE_LOG_PATH);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-  }
+  const payload: SendTextPayload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'text',
+    text: { body: text },
+  };
 
-  async connect(): Promise<void> {
-    if (this.connectionStatus === 'connected' || this.connectionStatus === 'connecting') {
-      return;
-    }
-
-    this.connectionStatus = 'connecting';
-    this.notifyStatus('connecting');
-
-    try {
-      const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-
-      this.sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true,
-        logger: logger as any,
-        browser: ['ADYAWEAR AI', 'Safari', '3.0.0'],
-        markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: false,
-        syncFullHistory: false,
-        retryRequestDelayMs: 2500,
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 25000,
-      });
-
-      this.sock.ev.on('creds.update', saveCreds);
-
-      this.sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-          this.qrCode = qr;
-          this.notifyQR(qr);
-          logger.info('QR code received');
-        }
-
-        if (connection === 'close') {
-          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-          
-          logger.info(`Connection closed. Status: ${statusCode}. Reconnect: ${shouldReconnect}`);
-          
-          this.connectionStatus = 'disconnected';
-          this.notifyStatus('disconnected');
-          this.qrCode = null;
-
-          if (shouldReconnect) {
-            setTimeout(() => this.connect(), 3000);
-          }
-        }
-
-        if (connection === 'open') {
-          this.connectionStatus = 'connected';
-          this.qrCode = null;
-          this.notifyStatus('connected');
-          logger.info('WhatsApp connected successfully');
-        }
-      });
-
-      this.sock.ev.on('messages.upsert', async (update: any) => {
-        if (update.type !== 'notify') return;
-        
-        for (const msg of update.messages) {
-          if (!msg.key.fromMe && msg.key.remoteJid && isJidUser(msg.key.remoteJid)) {
-            await this.handleIncomingMessage(msg as WhatsAppMessage);
-          }
-        }
-      });
-
-      this.sock.ev.on('messages.update', async (messages: any[]) => {
-        for (const msg of messages) {
-          if (msg.update.status) {
-            await this.handleMessageStatusUpdate(msg);
-          }
-        }
-      });
-
-    } catch (error) {
-      logger.error('Failed to connect WhatsApp:', error);
-      this.connectionStatus = 'disconnected';
-      this.notifyStatus('disconnected');
-      throw error;
-    }
-  }
-
-  private async handleIncomingMessage(msg: WhatsAppMessage) {
-    const from = msg.key.remoteJid || '';
-    const text = msg.message?.conversation || 
-                 msg.message?.extendedTextMessage?.text || '';
-    
-    logger.info(`Incoming message from ${from}: ${text}`);
-
-    this.logMessage({
-      id: msg.key.id || Date.now().toString(),
-      from,
-      to: 'bot',
-      body: text,
-      type: 'received',
-      timestamp: Date.now(),
-      status: 'delivered'
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
     });
-
-    for (const cb of this.messageCallbacks) {
-      cb(msg);
-    }
-  }
-
-  private async handleMessageStatusUpdate(msg: any) {
-    const status = msg.update.status;
-    if (!status) return;
-
-    const statusMap: Record<number, string> = {
-      0: 'pending',
-      1: 'sent',
-      2: 'delivered',
-      3: 'read',
-      4: 'played',
-      5: 'failed'
-    };
-
-    const mappedStatus = statusMap[status] || 'unknown';
-    logger.info(`Message ${msg.key.id} status: ${mappedStatus}`);
-  }
-
-  async sendMessage(to: string, text: string): Promise<boolean> {
-    if (!this.sock || this.connectionStatus !== 'connected') {
-      logger.error('WhatsApp not connected');
+    const data = await res.json();
+    if (data.error) {
+      console.error('WhatsApp send error:', data.error);
       return false;
     }
-
-    try {
-      const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-      await this.sock.sendMessage(jid, { text });
-      
-      this.logMessage({
-        id: Date.now().toString(),
-        from: 'bot',
-        to: jid,
-        body: text,
-        type: 'sent',
-        timestamp: Date.now(),
-        status: 'delivered'
-      });
-
-      return true;
-    } catch (error) {
-      logger.error('Failed to send message:', error);
-      return false;
-    }
-  }
-
-  async sendTemplate(to: string, templateName: string, params: Record<string, string>): Promise<boolean> {
-    const templates = this.getTemplates();
-    const template = templates[templateName];
-    
-    if (!template) {
-      logger.error(`Template ${templateName} not found`);
-      return false;
-    }
-
-    let message = template;
-    for (const [key, value] of Object.entries(params)) {
-      message = message.replace(new RegExp(`{{${key}}}`, 'g'), value);
-    }
-
-    return this.sendMessage(to, message);
-  }
-
-  private getTemplates(): Record<string, string> {
-    return {
-      welcome: '🎉 Welcome to ADYAWEAR!\n\nThank you for joining us. We offer premium quality clothing and accessories.\n\nHow can we help you today?',
-      order_confirmation: '✅ Order Confirmed!\n\nOrder #{{orderId}}\nAmount: ₹{{amount}}\nEstimated Delivery: {{deliveryDate}}\n\nThank you for shopping with ADYAWEAR!',
-      shipping: '🚚 Order Shipped!\n\nOrder #{{orderId}}\nTracking: {{trackingUrl}}\nExpected: {{deliveryDate}}\n\nTrack your order: {{trackingUrl}}',
-      delivered: '📦 Delivered!\n\nOrder #{{orderId}} has been delivered.\nWe hope you love your purchase!\n\nShare your experience: {{reviewUrl}}',
-      review_request: '⭐ How was your experience?\n\nHi {{name}}! Your order #{{orderId}} was delivered {{daysAgo}} days ago.\n\nRate us: {{reviewUrl}}\n\nYour feedback helps us serve you better!',
-      birthday: '🎂 Happy Birthday {{name}}!\n\nWishing you a wonderful day! Use code BIRTHDAY15 for 15% off.\n\nShop: {{shopUrl}}',
-      abandoned_cart: '🛒 You left something behind!\n\nItems in your cart:\n{{items}}\n\nComplete your order: {{cartUrl}}\n\nUse code COMEBACK10 for 10% off!',
-      refund: '💰 Refund Processed\n\nOrder #{{orderId}}\nAmount: ₹{{amount}}\nRefund ID: {{refundId}}\n\nRefund will reflect in 5-7 business days.',
-      back_in_stock: '🔔 Back in Stock!\n\n{{productName}} is available again!\n\nShop now: {{productUrl}}\n\nHurry, limited stock!',
-    };
-  }
-
-  async sendImage(to: string, buffer: Buffer, caption: string): Promise<boolean> {
-    if (!this.sock || this.connectionStatus !== 'connected') {
-      return false;
-    }
-
-    try {
-      const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-      await this.sock.sendMessage(jid, {
-        image: buffer,
-        caption
-      });
-      return true;
-    } catch (error) {
-      logger.error('Failed to send image:', error);
-      return false;
-    }
-  }
-
-  async sendDocument(to: string, buffer: Buffer, fileName: string, mimetype: string): Promise<boolean> {
-    if (!this.sock || this.connectionStatus !== 'connected') {
-      return false;
-    }
-
-    try {
-      const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-      await this.sock.sendMessage(jid, {
-        document: buffer,
-        fileName,
-        mimetype
-      });
-      return true;
-    } catch (error) {
-      logger.error('Failed to send document:', error);
-      return false;
-    }
-  }
-
-  private logMessage(log: MessageLog) {
-    try {
-      let messages: MessageLog[] = [];
-      if (fs.existsSync(MESSAGE_LOG_PATH)) {
-        const data = fs.readFileSync(MESSAGE_LOG_PATH, 'utf-8');
-        messages = JSON.parse(data);
-      }
-      messages.push(log);
-      fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify(messages, null, 2));
-    } catch (error) {
-      logger.error('Failed to log message:', error);
-    }
-  }
-
-  onQR(callback: (qr: string | null) => void) {
-    this.qrCallbacks.push(callback);
-    if (this.qrCode) callback(this.qrCode);
-  }
-
-  onStatus(callback: (status: string) => void) {
-    this.statusCallbacks.push(callback);
-    callback(this.connectionStatus);
-  }
-
-  onMessage(callback: (msg: WhatsAppMessage) => void) {
-    this.messageCallbacks.push(callback);
-  }
-
-  private notifyQR(qr: string | null) {
-    for (const cb of this.qrCallbacks) cb(qr);
-  }
-
-  private notifyStatus(status: string) {
-    for (const cb of this.statusCallbacks) cb(status);
-  }
-
-  getStatus(): string {
-    return this.connectionStatus;
-  }
-
-  getQR(): string | null {
-    return this.qrCode;
-  }
-
-  async disconnect(): Promise<void> {
-    if (this.sock) {
-      this.sock.end(undefined);
-      this.sock = null;
-    }
-    this.connectionStatus = 'disconnected';
-    this.qrCode = null;
-    this.notifyStatus('disconnected');
-  }
-
-  getMessages(): MessageLog[] {
-    try {
-      if (fs.existsSync(MESSAGE_LOG_PATH)) {
-        const data = fs.readFileSync(MESSAGE_LOG_PATH, 'utf-8');
-        return JSON.parse(data);
-      }
-    } catch (error) {}
-    return [];
-  }
-
-  getStats() {
-    const messages = this.getMessages();
-    const sent = messages.filter(m => m.type === 'sent');
-    const received = messages.filter(m => m.type === 'received');
-    
-    return {
-      total: messages.length,
-      sent: sent.length,
-      received: received.length,
-      failed: messages.filter(m => m.status === 'failed').length
-    };
+    return true;
+  } catch (err) {
+    console.error('WhatsApp send failed:', err);
+    return false;
   }
 }
 
-let sessionInstance: WhatsAppSession | null = null;
-
-export function getWhatsAppSession(): WhatsAppSession {
-  if (!sessionInstance) {
-    sessionInstance = new WhatsAppSession();
+export async function sendTemplateMessage(
+  to: string,
+  templateName: string,
+  params: string[],
+  langCode: string = 'en'
+): Promise<boolean> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) {
+    console.error('WhatsApp credentials not configured');
+    return false;
   }
-  return sessionInstance;
+
+  const bodyParams: TemplateParam[] = params.map((p) => ({
+    type: 'text' as const,
+    text: p,
+  }));
+
+  const payload: SendTemplatePayload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: langCode },
+      components: [
+        {
+          type: 'body',
+          parameters: bodyParams,
+        },
+      ],
+    },
+  };
+
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) {
+      console.error('WhatsApp template send error:', data.error);
+      return false;
+    }
+    console.log(`Template ${templateName} sent to ${to}`);
+    return true;
+  } catch (err) {
+    console.error('WhatsApp template send failed:', err);
+    return false;
+  }
 }
+
+export async function sendImageMessage(to: string, imageUrl: string, caption?: string): Promise<boolean> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return false;
+
+  const payload: SendImagePayload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'image',
+    image: { link: imageUrl, caption },
+  };
+
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return !data.error;
+  } catch {
+    return false;
+  }
+}
+
+export async function sendDocumentMessage(
+  to: string,
+  documentUrl: string,
+  filename: string,
+  caption?: string
+): Promise<boolean> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return false;
+
+  const payload: SendDocumentPayload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'document',
+    document: { link: documentUrl, filename, caption },
+  };
+
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return !data.error;
+  } catch {
+    return false;
+  }
+}
+
+export async function uploadMedia(buffer: Buffer, mimeType: string): Promise<string | null> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return null;
+
+  const formData = new FormData();
+  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  formData.append('file', new Blob([ab], { type: mimeType }), 'file');
+  formData.append('messaging_product', 'whatsapp');
+  formData.append('type', mimeType);
+
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}/media`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+      body: formData,
+    });
+    const data = await res.json();
+    return data.id || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyToken(): Promise<boolean> {
+  if (!ACCESS_TOKEN) return false;
+
+  try {
+    const res = await fetch(`${BASE_URL}/me?access_token=${ACCESS_TOKEN}`);
+    const data = await res.json();
+    return !!data.id;
+  } catch {
+    return false;
+  }
+}
+
+export async function getPhoneNumberInfo(): Promise<Record<string, unknown> | null> {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return null;
+
+  try {
+    const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}`, {
+      headers: headers(),
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// Template name mapping for Cloud API
+export const TEMPLATE_NAMES = {
+  welcome: 'welcome_premium',
+  order_placed: 'order_confirm_premium',
+  payment_received: 'payment_confirm_premium',
+  order_shipped: 'order_shipped_premium',
+  out_for_delivery: 'out_for_delivery_premium',
+  order_delivered: 'order_delivered_premium',
+  refund_processed: 'refund_status_premium',
+  return_update: 'return_status_premium',
+  review_request: 'review_ask_premium',
+  birthday_greeting: 'birthday_wish_premium',
+  abandoned_cart: 'cart_reminder_premium',
+  back_in_stock: 'back_in_stock_premium',
+  loyalty_points: 'loyalty_reward_premium',
+  care_tips: 'care_tips_premium',
+  wholesale_update: 'wholesale_status_premium',
+} as const;
+
+export type TemplateKey = keyof typeof TEMPLATE_NAMES;

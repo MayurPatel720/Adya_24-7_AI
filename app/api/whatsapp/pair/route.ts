@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWhatsAppSession } from '@/lib/whatsapp';
+import { verifyToken, getPhoneNumberInfo } from '@/lib/whatsapp';
 
 export async function GET() {
   try {
-    const session = getWhatsAppSession();
-    const status = session.getStatus();
-    const qr = session.getQR();
+    const connected = await verifyToken();
+    const phoneInfo = await getPhoneNumberInfo();
 
     return NextResponse.json({
-      status,
-      qr: status === 'disconnected' ? qr : null,
-      connected: status === 'connected'
+      status: connected ? 'connected' : 'disconnected',
+      connected,
+      service: 'cloud_api',
+      phoneNumber: (phoneInfo as Record<string, unknown>)?.display_phone_number || 'unknown',
+      verifiedName: (phoneInfo as Record<string, unknown>)?.verified_name || 'unknown',
+      qualityRating: (phoneInfo as Record<string, unknown>)?.quality_rating || 'unknown',
     });
   } catch (error) {
     return NextResponse.json({ status: 'error', error: 'Failed to get status' }, { status: 500 });
@@ -19,9 +21,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = getWhatsAppSession();
-    await session.connect();
-    return NextResponse.json({ success: true, message: 'Connecting...' });
+    const connected = await verifyToken();
+    if (connected) {
+      return NextResponse.json({ success: true, message: 'Already connected via Cloud API' });
+    }
+    return NextResponse.json({ error: 'Cloud API token invalid' }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to connect' }, { status: 500 });
   }

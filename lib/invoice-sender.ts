@@ -1,4 +1,4 @@
-import { getWhatsAppSession } from './whatsapp';
+import { sendTextMessage as sendWhatsAppText, sendDocumentMessage, uploadMedia } from './whatsapp';
 import { logger } from './logger';
 
 export async function sendInvoiceViaWhatsApp(
@@ -7,11 +7,16 @@ export async function sendInvoiceViaWhatsApp(
   invoicePdfBase64: string,
   fileName: string
 ): Promise<boolean> {
-  const caption = `📄 Invoice for order #${orderId}\n\nThank you for shopping with ADYAWEAR!`;
-  const session = getWhatsAppSession();
-  
+  const caption = `Invoice for order #${orderId}\n\nThank you for shopping with ADYAWEAR!`;
   const buffer = Buffer.from(invoicePdfBase64, 'base64');
-  const success = await session.sendDocument(customerPhone, buffer, fileName, 'application/pdf');
+
+  const mediaId = await uploadMedia(buffer, 'application/pdf');
+  if (!mediaId) {
+    logger.error('INVOICE', `Failed to upload invoice for order ${orderId}`);
+    return false;
+  }
+
+  const success = await sendDocumentMessage(customerPhone, mediaId, fileName, caption);
 
   if (success) {
     logger.info('INVOICE', `Invoice sent for order ${orderId} to ${customerPhone}`);
@@ -28,8 +33,7 @@ export async function sendTextMessage(
   event: string,
   orderId?: string
 ): Promise<boolean> {
-  const session = getWhatsAppSession();
-  const success = await session.sendMessage(customerPhone, text);
+  const success = await sendWhatsAppText(customerPhone, text);
 
   if (success) {
     logger.info(event, `Message sent to ${customerPhone}`, { orderId });
