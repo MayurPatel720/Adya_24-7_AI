@@ -21,3 +21,13 @@ services:
         value: +917859976160
       - key: XIAOMI_API_KEY
         sync: false
+      - key: WHATSAPP_TOKEN
+        value: EAAOZCwCNZCWggBRwbC52WC8uvqmubsTUHakf4sBcvsS6OYRb7gYB886pkD4VGFI4Ktc9rRWtPJhNACUgru7qmRDRwMZA4Uiovc2NpJOn3Xp9ydTttvZAcuxPngCNYVGqnTIcxYxQcGWojKYPaE3UYO0BMG7ZANZAvcWlYU57iWUwXT2mK5YyaoTqj7SuT1sV9POAZDZD
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        value: "1164066433467145"
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        value: "2294962717911672"
+      - key: WHATSAPP_API_VERSION
+        value: v23.0
+      - key: WEBHOOK_VERIFY_TOKEN
+        value: adyawear_verify_2026
