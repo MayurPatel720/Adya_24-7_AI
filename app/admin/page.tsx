@@ -164,6 +164,31 @@ export default function AdminPage() {
       <button onClick={() => fetchLogs()} style={{ marginTop: 16, padding: '8px 16px', background: 'transparent', color: '#C4964A', border: '1px solid #C4964A', borderRadius: 4, cursor: 'pointer', fontSize: 12, letterSpacing: 1 }}>
         REFRESH
       </button>
+
+      <div style={{ marginTop: 24, textAlign: 'center' }}>
+        <a
+          href="/admin/conversations"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 24px',
+            background: '#C4964A',
+            color: '#0a0806',
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: 14,
+            textDecoration: 'none',
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          View Live Conversations
+        </a>
+      </div>
     </div>
   );
 }

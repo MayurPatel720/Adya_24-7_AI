@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendTextMessage } from '@/lib/whatsapp';
+import { saveMessage } from '@/lib/db';
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'adyawear_verify_2026';
 
@@ -74,8 +75,14 @@ export async function POST(request: NextRequest) {
 
         if (text) {
           console.log(`Incoming message from ${from}: ${text}`);
+          saveMessage(from, 'received', text, 'text');
+
           const aiResponse = await generateAIResponse(text);
-          await sendTextMessage(from, aiResponse);
+          const sent = await sendTextMessage(from, aiResponse);
+
+          if (sent) {
+            saveMessage(from, 'sent', aiResponse, 'text');
+          }
         }
       }
     }

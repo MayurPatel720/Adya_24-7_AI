@@ -1,3 +1,5 @@
+import { saveMessage } from './db';
+
 const API_VERSION = process.env.WHATSAPP_API_VERSION || 'v23.0';
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const ACCESS_TOKEN = process.env.WHATSAPP_TOKEN;
@@ -96,6 +98,7 @@ export async function sendTextMessage(to: string, text: string): Promise<boolean
       console.error('WhatsApp send error:', data.error);
       return false;
     }
+    saveMessage(to, 'sent', text, 'text');
     return true;
   } catch (err) {
     console.error('WhatsApp send failed:', err);
@@ -147,6 +150,7 @@ export async function sendTemplateMessage(
       return false;
     }
     console.log(`Template ${templateName} sent to ${to}`);
+    saveMessage(to, 'sent', `[Template: ${templateName}] ${params.join(', ')}`, 'template', templateName);
     return true;
   } catch (err) {
     console.error('WhatsApp template send failed:', err);
