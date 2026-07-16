@@ -269,7 +269,25 @@ export function loyaltyPoints(data: LoyaltyData): string {
   ].join('\n');
 }
 
-// ─── 16. Wholesale Update ────────────────────────────────────
+// ─── 16. OTP Verification ────────────────────────────────────
+export function verificationOtp(code: string, name: string): string {
+  return [
+    `🔐 *Your Verification Code*`,
+    ``,
+    `Hi ${name},`,
+    ``,
+    `Use this code to complete your login:`,
+    ``,
+    `*${code}*`,
+    ``,
+    `This code expires in 5 minutes.`,
+    `If you didn't request this, ignore this message.`,
+    ``,
+    `Team ADYAWEAR 💛`,
+  ].join('\n');
+}
+
+// ─── 17. Wholesale Update ────────────────────────────────────
 export function wholesaleUpdate(orderId: string, status: string, note?: string): string {
   const lines = [
     `📋 *Wholesale Order Update*`,
