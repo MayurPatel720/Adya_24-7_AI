@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
       for (const status of value.statuses) {
         const errors = status.errors?.map((e: any) => JSON.stringify(e)).join(' | ') || 'none';
         console.log(`Message status: ${status.id} -> ${status.status} | recipient: ${status.recipient_id} | errors: ${errors}`);
+        saveMessage(status.recipient_id || 'unknown', 'received', `STATUS:${status.status} ${errors === 'none' ? '' : '| ' + errors}`, 'text');
       }
     }
 
