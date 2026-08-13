@@ -12,6 +12,8 @@ interface TemplateParam {
 
 interface TemplateComponent {
   type: 'header' | 'body' | 'button';
+  sub_type?: 'url';
+  index?: string;
   parameters: TemplateParam[];
 }
 
@@ -110,7 +112,8 @@ export async function sendTemplateMessage(
   to: string,
   templateName: string,
   params: string[],
-  langCode: string = 'en'
+  langCode: string = 'en',
+  buttonParams: string[] = []
 ): Promise<boolean> {
   if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) {
     console.error('WhatsApp credentials not configured');
@@ -122,6 +125,25 @@ export async function sendTemplateMessage(
     text: p,
   }));
 
+  const components: TemplateComponent[] = [
+    {
+      type: 'body',
+      parameters: bodyParams,
+    },
+  ];
+
+  if (buttonParams.length > 0) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: buttonParams.map((p) => ({
+        type: 'text' as const,
+        text: p,
+      })),
+    });
+  }
+
   const payload: SendTemplatePayload = {
     messaging_product: 'whatsapp',
     to,
@@ -129,12 +151,7 @@ export async function sendTemplateMessage(
     template: {
       name: templateName,
       language: { code: langCode },
-      components: [
-        {
-          type: 'body',
-          parameters: bodyParams,
-        },
-      ],
+      components,
     },
   };
 
@@ -273,6 +290,8 @@ export const TEMPLATE_NAMES = {
   loyalty_points: 'loyalty_reward_premium',
   care_tips: 'care_tips_premium',
   wholesale_update: 'wholesale_status_premium',
+  order_cancelled: 'order_cancelled_premium',
+  otp_sent: 'otp_verification',
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATE_NAMES;

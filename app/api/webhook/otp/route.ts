@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
@@ -20,9 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No phone — skipped' });
     }
 
-    const message = templates.verificationOtp(otp.otpCode, otp.customerName || 'there');
+    const code = String(otp.otpCode || '');
 
-    sendTextMessage(otp.customerPhone, message, 'otp_sent').catch(() => {});
+    sendMessageTemplate(otp.customerPhone, 'otp_sent', [code], 'otp_sent', '', [code]).catch((err) => {
+      logger.error('WEBHOOK-OTP', 'Failed to send otp_verification', { error: err.message });
+    });
 
     return NextResponse.json({ success: true, phone: otp.customerPhone });
   } catch (err: any) {

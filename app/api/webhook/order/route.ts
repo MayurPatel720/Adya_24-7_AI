@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
+
+function fmtINR(n: number | undefined): string {
+  return '₹' + (n ?? 0).toLocaleString('en-IN');
+}
+
+function fmtDate(input: string | undefined): string {
+  if (!input) return 'within 7 days';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return input;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,34 +32,34 @@ export async function POST(req: NextRequest) {
     }
 
     const phone = order.shippingAddress.phone;
-    let message = '';
-    let templateName = '';
+    const name = order.shippingAddress.fullName || 'there';
+    let templateKey = '';
+    let params: string[] = [];
 
     switch (event) {
       case 'customer.created':
-        message = templates.welcome(order.shippingAddress.fullName || 'there');
-        templateName = 'welcome';
+        templateKey = 'welcome';
+        params = [name];
         break;
       case 'order.created':
-        message = templates.orderPlaced(order);
-        templateName = 'order_placed';
+        templateKey = 'order_placed';
+        params = [name, String(order.orderId), fmtINR(order.total), fmtDate(order.estimatedDelivery)];
         break;
       case 'payment.success':
-        message = templates.paymentReceived(order);
-        templateName = 'payment_received';
+        templateKey = 'payment_received';
+        params = [name, fmtINR(order.total), String(order.orderId), fmtDate(order.createdAt)];
         break;
       case 'order.confirmed':
-        message = templates.orderConfirmed(order);
-        templateName = 'order_confirmed';
+        templateKey = 'order_placed';
+        params = [name, String(order.orderId), fmtINR(order.total), fmtDate(order.estimatedDelivery)];
         break;
       default:
         logger.info('WEBHOOK', `Unknown order event: ${event}`);
         return NextResponse.json({ success: true, message: 'Event not handled' });
     }
 
-    // Fire-and-forget — don't block the response
-    sendTextMessage(phone, message, templateName, order.orderId).catch((err) => {
-      logger.error('WEBHOOK', `Failed to send ${templateName}`, { error: err.message });
+    sendMessageTemplate(phone, templateKey, params, templateKey, order.orderId).catch((err) => {
+      logger.error('WEBHOOK', `Failed to send ${templateKey}`, { error: err.message });
     });
 
     return NextResponse.json({ success: true, event, orderId: order.orderId });

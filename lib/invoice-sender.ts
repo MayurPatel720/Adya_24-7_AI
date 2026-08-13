@@ -1,4 +1,4 @@
-import { sendTextMessage as sendWhatsAppText, sendDocumentMessage, uploadMedia } from './whatsapp';
+import { sendTextMessage as sendWhatsAppText, sendDocumentMessage, uploadMedia, sendTemplateMessage as sendWhatsAppTemplate, TEMPLATE_NAMES, TemplateKey } from './whatsapp';
 import { logger } from './logger';
 
 export async function sendInvoiceViaWhatsApp(
@@ -39,6 +39,26 @@ export async function sendTextMessage(
     logger.info(event, `Message sent to ${customerPhone}`, { orderId });
   } else {
     logger.error(event, `Failed to send to ${customerPhone}`);
+  }
+
+  return success;
+}
+
+export async function sendMessageTemplate(
+  customerPhone: string,
+  templateKey: string,
+  params: string[],
+  event: string,
+  orderId?: string,
+  buttonParams: string[] = []
+): Promise<boolean> {
+  const templateName = TEMPLATE_NAMES[templateKey as TemplateKey] || templateKey;
+  const success = await sendWhatsAppTemplate(customerPhone, templateName, params, 'en', buttonParams);
+
+  if (success) {
+    logger.info(event, `Template ${templateName} sent to ${customerPhone}`, { orderId });
+  } else {
+    logger.error(event, `Failed to send template ${templateName} to ${customerPhone}`, { orderId });
   }
 
   return success;

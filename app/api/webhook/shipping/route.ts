@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
+
+function fmtDate(input: string | undefined): string {
+  if (!input) return 'within 7 days';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return input;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const STORE_URL = process.env.ADYAWEAR_STORE_URL || 'https://www.adyawear.in';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,33 +29,45 @@ export async function POST(req: NextRequest) {
     }
 
     const phone = order.shippingAddress.phone;
-    let message = '';
-    let templateName = '';
+    const name = order.shippingAddress.fullName || 'there';
+    const orderId = String(order.orderId || '');
+    let templateKey = '';
+    let params: string[] = [];
 
     switch (event) {
-      case 'order.shipped':
-        message = templates.shipped(order);
-        templateName = 'shipped';
+      case 'order.shipped': {
+        const tracking = order.awbNumber
+          ? `${order.courierName || 'Courier'} • ${order.awbNumber}`
+          : order.trackingUrl || 'On its way to you';
+        templateKey = 'order_shipped';
+        params = [name, orderId, tracking, fmtDate(order.estimatedDelivery)];
         break;
-      case 'order.out_for_delivery':
-        message = templates.outForDelivery(order);
-        templateName = 'out_for_delivery';
+      }
+      case 'order.out_for_delivery': {
+        const addr = [order.shippingAddress.line1, order.shippingAddress.city, order.shippingAddress.state, order.shippingAddress.pincode]
+          .filter(Boolean)
+          .join(', ');
+        templateKey = 'out_for_delivery';
+        params = [name, orderId, addr || 'your address', phone];
         break;
+      }
       case 'order.delivered':
-        message = templates.delivered(order);
-        templateName = 'delivered';
+        templateKey = 'order_delivered';
+        params = [name, orderId, fmtDate(new Date().toISOString()), `${STORE_URL}/account/orders/${orderId}`];
         break;
       case 'order.cancelled':
-        message = `❌ *Order Cancelled*\n\nHi ${order.shippingAddress.fullName},\n\nYour order #${order.orderId} has been cancelled.\n\nIf this was a mistake, please contact us.`;
-        templateName = 'cancelled';
+        templateKey = 'order_cancelled';
+        params = [name, orderId];
         break;
       default:
         return NextResponse.json({ success: true, message: 'Event not handled' });
     }
 
-    sendTextMessage(phone, message, templateName, order.orderId).catch(() => {});
+    sendMessageTemplate(phone, templateKey, params, templateKey, orderId).catch((err) => {
+      logger.error('WEBHOOK-SHIP', `Failed to send ${templateKey}`, { error: err.message });
+    });
 
-    return NextResponse.json({ success: true, event, orderId: order.orderId });
+    return NextResponse.json({ success: true, event, orderId });
   } catch (err: any) {
     logger.error('WEBHOOK-SHIP', 'Shipping webhook error', { error: err.message });
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

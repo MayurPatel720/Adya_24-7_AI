@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
@@ -20,9 +19,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No phone — skipped' });
     }
 
-    const message = templates.abandonedCart(cart);
+    const name = cart.customerName || 'there';
+    const itemsText = Array.isArray(cart.items)
+      ? cart.items.map((i: any) => `${i.name} x${i.quantity}`).slice(0, 4).join(', ')
+      : '';
+    const total = '₹' + (cart.subtotal ?? cart.total ?? 0).toLocaleString('en-IN');
 
-    sendTextMessage(cart.customerPhone, message, 'abandoned_cart').catch(() => {});
+    sendMessageTemplate(cart.customerPhone, 'abandoned_cart', [name, itemsText, total], 'abandoned_cart', '').catch((err) => {
+      logger.error('WEBHOOK-CART', 'Failed to send abandoned_cart', { error: err.message });
+    });
 
     return NextResponse.json({ success: true, userId: cart.userId });
   } catch (err: any) {

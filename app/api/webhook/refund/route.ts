@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
@@ -20,11 +19,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No phone — skipped' });
     }
 
-    const message = templates.refundProcessed(refund);
+    const name = refund.customerName || 'there';
+    const orderId = String(refund.orderId || '');
+    const amount = '₹' + (refund.refundAmount ?? 0).toLocaleString('en-IN');
+    const expectedBy = 'within 5-7 business days';
 
-    sendTextMessage(refund.customerPhone, message, 'refund_processed', refund.orderId).catch(() => {});
+    sendMessageTemplate(refund.customerPhone, 'refund_processed', [name, orderId, amount, expectedBy], 'refund_processed', orderId).catch((err) => {
+      logger.error('WEBHOOK-REFUND', `Failed to send refund_processed`, { error: err.message });
+    });
 
-    return NextResponse.json({ success: true, orderId: refund.orderId });
+    return NextResponse.json({ success: true, orderId });
   } catch (err: any) {
     logger.error('WEBHOOK-REFUND', 'Refund webhook error', { error: err.message });
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

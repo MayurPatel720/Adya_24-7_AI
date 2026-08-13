@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/auth';
-import { sendTextMessage } from '@/lib/invoice-sender';
-import * as templates from '@/lib/whatsapp-templates';
+import { sendMessageTemplate } from '@/lib/invoice-sender';
 import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
@@ -20,9 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'No phone — skipped' });
     }
 
-    const message = templates.backInStock(stock);
+    const name = stock.customerName || 'there';
 
-    sendTextMessage(stock.customerPhone, message, 'back_in_stock').catch(() => {});
+    sendMessageTemplate(stock.customerPhone, 'back_in_stock', [name, String(stock.productName || '')], 'back_in_stock', '').catch((err) => {
+      logger.error('WEBHOOK-STOCK', 'Failed to send back_in_stock', { error: err.message });
+    });
 
     return NextResponse.json({ success: true, productName: stock.productName });
   } catch (err: any) {
