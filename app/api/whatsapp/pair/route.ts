@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, getPhoneNumberInfo } from '@/lib/whatsapp';
+import { verifyToken, getPhoneNumberInfo, isMetaRateLimited } from '@/lib/whatsapp';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -10,6 +12,7 @@ export async function GET() {
       status: connected ? 'connected' : 'disconnected',
       connected,
       service: 'cloud_api',
+      metaRateLimited: isMetaRateLimited(),
       phoneNumber: (phoneInfo as Record<string, unknown>)?.display_phone_number || 'unknown',
       verifiedName: (phoneInfo as Record<string, unknown>)?.verified_name || 'unknown',
       qualityRating: (phoneInfo as Record<string, unknown>)?.quality_rating || 'unknown',

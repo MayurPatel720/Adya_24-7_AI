@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 export default function HomePage() {
   const [status, setStatus] = useState('disconnected');
+  const [metaRateLimited, setMetaRateLimited] = useState(false);
   const [stats, setStats] = useState({ total: 0, sent: 0, received: 0 });
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verifiedName, setVerifiedName] = useState('');
@@ -14,6 +15,7 @@ export default function HomePage() {
       const res = await fetch('/api/whatsapp/pair');
       const data = await res.json();
       setStatus(data.status);
+      setMetaRateLimited(!!data.metaRateLimited);
       if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
       if (data.verifiedName) setVerifiedName(data.verifiedName);
       if (data.qualityRating) setQualityRating(data.qualityRating);
@@ -28,9 +30,21 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 10000);
+    const interval = setInterval(fetchStatus, 60000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  const isConnected = status === 'connected';
+  const isChecking = isConnected && metaRateLimited;
+  const dotColor = isChecking ? '#FFC107' : isConnected ? '#4CAF50' : '#F44336';
+  const labelColor = isChecking ? '#FFC107' : isConnected ? '#4CAF50' : '#F44336';
+  const label = isChecking
+    ? 'WhatsApp Cloud API — Checking Meta…'
+    : isConnected
+      ? 'WhatsApp Cloud API Connected'
+      : 'Disconnected';
+  const cardBg = isConnected ? '#0a1a0a' : '#1a0a0a';
+  const cardBorder = isConnected ? '#2a4a2a' : '#4a2a2a';
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '60px 20px' }}>
@@ -44,23 +58,23 @@ export default function HomePage() {
       {/* Connection Status Card */}
       <div style={{
         marginTop: 24, padding: 24, borderRadius: 8,
-        background: status === 'connected' ? '#0a1a0a' : '#1a0a0a',
-        border: `1px solid ${status === 'connected' ? '#2a4a2a' : '#4a2a2a'}`
+        background: cardBg,
+        border: `1px solid ${cardBorder}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
             width: 12, height: 12, borderRadius: '50%',
-            background: status === 'connected' ? '#4CAF50' : '#F44336'
+            background: dotColor
           }} />
           <span style={{
-            color: status === 'connected' ? '#4CAF50' : '#F44336',
+            color: labelColor,
             fontWeight: 600, fontSize: 14, textTransform: 'uppercase', letterSpacing: 1
           }}>
-            {status === 'connected' ? 'WhatsApp Cloud API Connected' : 'Disconnected'}
+            {label}
           </span>
         </div>
 
-        {status === 'connected' && (
+        {isConnected && (
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <div>
               <div style={{ color: '#8A7E72', fontSize: 11, textTransform: 'uppercase' }}>Phone</div>
@@ -79,7 +93,7 @@ export default function HomePage() {
       </div>
 
       {/* Quick Actions */}
-      {status === 'connected' && (
+      {isConnected && (
         <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <QuickSendCard to="+917859976160" label="Test Message" message="Hello! This is a test from ADYAWEAR AI." />
           <StatsCard stats={stats} />

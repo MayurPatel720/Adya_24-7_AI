@@ -248,28 +248,41 @@ export async function uploadMedia(buffer: Buffer, mimeType: string): Promise<str
   }
 }
 
+// Config-only connectivity check — never calls the Graph API, so it cannot be rate-limited.
 export async function verifyToken(): Promise<boolean> {
-  if (!ACCESS_TOKEN) return false;
+  return !!(PHONE_NUMBER_ID && ACCESS_TOKEN);
+}
 
-  try {
-    const res = await fetch(`${BASE_URL}/me?access_token=${ACCESS_TOKEN}`);
-    const data = await res.json();
-    return !!data.id;
-  } catch {
-    return false;
-  }
+const PHONE_INFO_TTL = 10 * 60 * 1000; // 10 minutes
+let phoneInfoCache: { data: Record<string, unknown> | null; fetchedAt: number } | null = null;
+let metaRateLimited = false;
+
+export function isMetaRateLimited(): boolean {
+  return metaRateLimited;
 }
 
 export async function getPhoneNumberInfo(): Promise<Record<string, unknown> | null> {
   if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return null;
 
+  const now = Date.now();
+  if (phoneInfoCache && now - phoneInfoCache.fetchedAt < PHONE_INFO_TTL) {
+    return phoneInfoCache.data;
+  }
+
   try {
     const res = await fetch(`${BASE_URL}/${PHONE_NUMBER_ID}`, {
       headers: headers(),
     });
-    return await res.json();
+    const data = await res.json();
+    if (res.status === 403 || res.status === 429 || (data && (data as { error?: unknown }).error)) {
+      metaRateLimited = true;
+      return phoneInfoCache ? phoneInfoCache.data : null;
+    }
+    metaRateLimited = false;
+    phoneInfoCache = { data, fetchedAt: now };
+    return data;
   } catch {
-    return null;
+    return phoneInfoCache ? phoneInfoCache.data : null;
   }
 }
 
