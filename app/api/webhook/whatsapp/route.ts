@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
 
     if (value.statuses) {
       for (const status of value.statuses) {
-        console.log(`Message status: ${status.id} -> ${status.status}`);
+        const errors = status.errors?.map((e: any) => JSON.stringify(e)).join(' | ') || 'none';
+        console.log(`Message status: ${status.id} -> ${status.status} | recipient: ${status.recipient_id} | errors: ${errors}`);
       }
     }
 
